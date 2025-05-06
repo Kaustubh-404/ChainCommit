@@ -1,12 +1,12 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import type React from "react"
-import { useState } from "react"
 import useWallet from "../../lib/hooks/useWallet"
 import useCommitment from "../../lib/hooks/useCommitment"
 import { agreeToComplete } from "../../lib/contract"
 import { formatAddress } from "../../lib/utils/formatters"
-import { AlertTriangle, Loader2, Users, Calendar, Clock, Coins, CheckCircle2, XCircle, Activity } from "lucide-react"
+import { AlertTriangle, Loader2, Users, Calendar, Clock, Coins, CheckCircle2, XCircle, Activity, RefreshCw } from "lucide-react"
 
 interface CommitmentDetailsProps {
   commitmentId: string
@@ -31,6 +31,13 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
   const [agreeError, setAgreeError] = useState<string | null>(null)
   const [showMembersModal, setShowMembersModal] = useState<boolean>(false)
   const [showEventsModal, setShowEventsModal] = useState<boolean>(false)
+  const [mounted, setMounted] = useState<boolean>(false)
+  const [retryCount, setRetryCount] = useState<number>(0)
+
+  // Set mounted flag after component mounts
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Check if user is a member
   const isMember = account && members.map((addr) => addr.toLowerCase()).includes(account.toLowerCase())
@@ -45,7 +52,10 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
 
   // Handle agree to complete
   const handleAgreeToComplete = async () => {
-    if (!signer) return
+    if (!signer) {
+      setAgreeError("Wallet not connected or signer not available")
+      return
+    }
 
     if (!isCorrectNetwork) {
       setAgreeError("Please switch to the Polkadot network")
@@ -57,7 +67,7 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
       setAgreeError(null)
 
       await agreeToComplete(signer, commitmentId)
-
+      
       // Refresh data
       refreshData()
     } catch (err: any) {
@@ -66,6 +76,24 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
     } finally {
       setAgreeLoading(false)
     }
+  }
+  
+  // Handle retry
+  const handleRetry = () => {
+    setRetryCount(count => count + 1)
+    refreshData()
+  }
+
+  // If not mounted yet, show a minimal loading state to prevent hydration issues
+  if (!mounted) {
+    return (
+      <div className="card flex justify-center items-center py-12">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   // Show loading state
@@ -80,7 +108,7 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
     )
   }
 
-  // Show error state
+  // Show error state with retry button
   if (error || !commitment) {
     return (
       <div className="card">
@@ -89,7 +117,19 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
             <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
           <h3 className="heading-3 mb-2">Error Loading Commitment</h3>
-          <p className="text-muted-foreground">{error || "Commitment not found"}</p>
+          <p className="text-muted-foreground mb-6">{error || "Commitment not found"}</p>
+          <button 
+            onClick={handleRetry} 
+            className="btn-outline flex items-center justify-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            <span>Retry ({retryCount})</span>
+          </button>
+          {retryCount > 2 && (
+            <p className="text-sm text-muted-foreground mt-4">
+              Still having issues? Try refreshing the page or checking your wallet connection.
+            </p>
+          )}
         </div>
       </div>
     )
@@ -160,7 +200,7 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
                   <span className="text-sm">Total Staked</span>
                 </div>
                 <span className="font-medium">
-                  {Number.parseFloat(commitment.stakeAmount) * commitment.joinedMembers} DOT
+                  {(Number.parseFloat(commitment.stakeAmount) * commitment.joinedMembers).toFixed(4)} DOT
                 </span>
               </div>
 
@@ -311,29 +351,38 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
             </div>
 
             <div className="p-4 overflow-y-auto flex-grow">
-              <div className="space-y-3">
-                {members.map((member, index) => (
-                  <div key={member} className="flex justify-between items-center rounded-lg border bg-secondary/20 p-3">
-                    <div className="flex items-center">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary mr-3">
-                        <span className="text-xs font-medium">{index + 1}</span>
-                      </div>
-                      <span>{formatAddress(member)}</span>
-                      {member.toLowerCase() === account?.toLowerCase() && (
-                        <span className="ml-2 badge badge-secondary text-xs">You</span>
-                      )}
-                    </div>
-
-                    <div>
-                      {memberAgreements[member.toLowerCase()] ? (
-                        <span className="badge badge-success">Agreed</span>
-                      ) : (
-                        <span className="badge badge-outline">Pending</span>
-                      )}
-                    </div>
+              {members.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary mb-4">
+                    <Users className="h-6 w-6 text-muted-foreground" />
                   </div>
-                ))}
-              </div>
+                  <p className="text-muted-foreground">No members data available</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {members.map((member, index) => (
+                    <div key={member} className="flex justify-between items-center rounded-lg border bg-secondary/20 p-3">
+                      <div className="flex items-center">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary mr-3">
+                          <span className="text-xs font-medium">{index + 1}</span>
+                        </div>
+                        <span>{formatAddress(member)}</span>
+                        {member.toLowerCase() === account?.toLowerCase() && (
+                          <span className="ml-2 badge badge-secondary text-xs">You</span>
+                        )}
+                      </div>
+
+                      <div>
+                        {memberAgreements[member.toLowerCase()] ? (
+                          <span className="badge badge-success">Agreed</span>
+                        ) : (
+                          <span className="badge badge-outline">Pending</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -359,7 +408,7 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary mb-4">
                     <Activity className="h-6 w-6 text-muted-foreground" />
                   </div>
-                  <p className="text-muted-foreground">No activity yet</p>
+                  <p className="text-muted-foreground">No activity data available</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -382,9 +431,9 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
                       <div className="rounded-lg border bg-secondary/20 p-3">
                         <p className="text-sm font-medium">
                           {event.type === "CommitmentCreated"
-                            ? `Commitment created by ${formatAddress(event.creator)}`
+                            ? `Commitment created by ${event.creator ? formatAddress(event.creator) : 'Unknown'}`
                             : event.type === "MemberJoined"
-                              ? `${formatAddress(event.member)} joined the commitment`
+                              ? `${event.member ? formatAddress(event.member) : 'Unknown member'} joined the commitment`
                               : event.type === "CommitmentCompleted" && event.successful
                                 ? "Commitment completed successfully"
                                 : "Commitment failed"}
@@ -406,3 +455,8 @@ const CommitmentDetails: React.FC<CommitmentDetailsProps> = ({ commitmentId }) =
 }
 
 export default CommitmentDetails
+
+
+
+
+

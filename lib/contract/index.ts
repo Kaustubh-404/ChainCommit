@@ -418,6 +418,7 @@ export const listenForCommitmentEvents = (
 }
 
 // Get event history for a commitment
+// Fixed getCommitmentEventHistory function for contract/index.ts
 export const getCommitmentEventHistory = async (
   provider: Provider,
   commitmentId: string,
@@ -426,89 +427,144 @@ export const getCommitmentEventHistory = async (
     throw new Error("Provider and commitment ID are required")
   }
 
-  const contract = getContract(provider)
-  const events: CommitmentEvent[] = []
-
   try {
-    // Get block number at contract deployment
-    // You might want to optimize this by using a known block number
-    const deploymentBlock = 0 // Replace with actual deployment block
+    const contract = getContract(provider)
+    const events: CommitmentEvent[] = []
+
+    // Use a safer approach with better error handling
+    // Start with a more recent block number to avoid timeouts
+    let startBlock: number
+    try {
+      const latestBlock = await provider.getBlockNumber()
+      // Go back only 10000 blocks or to block 0, whichever is greater
+      startBlock = Math.max(0, latestBlock - 10000)
+    } catch (err) {
+      console.error("Error getting latest block:", err)
+      // Default to block 0 if we can't get the latest
+      startBlock = 0
+    }
+
     const latestBlock = await provider.getBlockNumber()
 
-    // Get all events and filter them in memory
-    const allCreatedEvents = await contract.queryFilter("CommitmentCreated", deploymentBlock, latestBlock)
-    const allJoinedEvents = await contract.queryFilter("MemberJoined", deploymentBlock, latestBlock)
-    const allCompletedEvents = await contract.queryFilter("CommitmentCompleted", deploymentBlock, latestBlock)
+    // Handling each event type separately to prevent one failure from breaking everything
+    let createdEvents: Array<any> = []
+    let joinedEvents: Array<any> = []
+    let completedEvents: Array<any> = []
+
+    try {
+      // Get CommitmentCreated events
+      createdEvents = await contract.queryFilter("CommitmentCreated", startBlock, latestBlock)
+    } catch (err) {
+      console.error("Error fetching CommitmentCreated events:", err)
+    }
+
+    try {
+      // Get MemberJoined events
+      joinedEvents = await contract.queryFilter("MemberJoined", startBlock, latestBlock)
+    } catch (err) {
+      console.error("Error fetching MemberJoined events:", err)
+    }
+
+    try {
+      // Get CommitmentCompleted events
+      completedEvents = await contract.queryFilter("CommitmentCompleted", startBlock, latestBlock)
+    } catch (err) {
+      console.error("Error fetching CommitmentCompleted events:", err)
+    }
+
+    // Helper for safely accessing event args
+    const getEventArgs = (log: any) => {
+      try {
+        if ("args" in log) {
+          return log.args
+        }
+        return undefined
+      } catch (err) {
+        console.error("Error getting event args:", err)
+        return undefined
+      }
+    }
 
     // Filter events for this specific commitment
-    const createdEvents = allCreatedEvents.filter((event) => {
-      const args = getEventArgs(event)
-      return args && args[0] === commitmentId
-    })
+    try {
+      const filteredCreatedEvents = createdEvents.filter((event) => {
+        const args = getEventArgs(event)
+        return args && args[0] === commitmentId
+      })
 
-    const joinedEvents = allJoinedEvents.filter((event) => {
-      const args = getEventArgs(event)
-      return args && args[0] === commitmentId
-    })
+      const filteredJoinedEvents = joinedEvents.filter((event) => {
+        const args = getEventArgs(event)
+        return args && args[0] === commitmentId
+      })
 
-    const completedEvents = allCompletedEvents.filter((event) => {
-      const args = getEventArgs(event)
-      return args && args[0] === commitmentId
-    })
+      const filteredCompletedEvents = completedEvents.filter((event) => {
+        const args = getEventArgs(event)
+        return args && args[0] === commitmentId
+      })
 
-    // Process CommitmentCreated events
-    createdEvents.forEach((event) => {
-      const args = getEventArgs(event)
-      if (args) {
-        events.push({
-          type: "CommitmentCreated",
-          commitmentId: args[0],
-          name: args[1],
-          creator: args[2],
-          joinCode: args[3],
-          blockNumber: event.blockNumber,
-          transactionHash: event.transactionHash,
-          timestamp: new Date(),
-        })
-      }
-    })
+      // Process CommitmentCreated events
+      filteredCreatedEvents.forEach((event) => {
+        const args = getEventArgs(event)
+        if (args) {
+          events.push({
+            type: "CommitmentCreated",
+            commitmentId: args[0],
+            name: args[1],
+            creator: args[2],
+            joinCode: args[3],
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash,
+            timestamp: new Date(),
+          })
+        }
+      })
 
-    // Process MemberJoined events
-    joinedEvents.forEach((event) => {
-      const args = getEventArgs(event)
-      if (args) {
-        events.push({
-          type: "MemberJoined",
-          commitmentId: args[0],
-          member: args[1],
-          blockNumber: event.blockNumber,
-          transactionHash: event.transactionHash,
-          timestamp: new Date(),
-        })
-      }
-    })
+      // Process MemberJoined events
+      filteredJoinedEvents.forEach((event) => {
+        const args = getEventArgs(event)
+        if (args) {
+          events.push({
+            type: "MemberJoined",
+            commitmentId: args[0],
+            member: args[1],
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash,
+            timestamp: new Date(),
+          })
+        }
+      })
 
-    // Process CommitmentCompleted events
-    completedEvents.forEach((event) => {
-      const args = getEventArgs(event)
-      if (args) {
-        events.push({
-          type: "CommitmentCompleted",
-          commitmentId: args[0],
-          successful: args[1],
-          blockNumber: event.blockNumber,
-          transactionHash: event.transactionHash,
-          timestamp: new Date(),
-        })
-      }
-    })
+      // Process CommitmentCompleted events
+      filteredCompletedEvents.forEach((event) => {
+        const args = getEventArgs(event)
+        if (args) {
+          events.push({
+            type: "CommitmentCompleted",
+            commitmentId: args[0],
+            successful: args[1],
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash,
+            timestamp: new Date(),
+          })
+        }
+      })
+    } catch (err) {
+      console.error("Error processing events:", err)
+      // Return an empty array rather than failing
+      return []
+    }
 
-    // Get timestamps for all events
+    // Try to get timestamps for events, but handle failures gracefully
     for (let i = 0; i < events.length; i++) {
       if (events[i].blockNumber !== undefined) {
-        const block = await provider.getBlock(Number(events[i].blockNumber))
-        if (block) {
-          events[i].timestamp = new Date(Number(block.timestamp) * 1000)
+        try {
+          const block = await provider.getBlock(Number(events[i].blockNumber))
+          if (block && block.timestamp) {
+            events[i].timestamp = new Date(Number(block.timestamp) * 1000)
+          }
+        } catch (err) {
+          console.error(`Error getting timestamp for event ${i}:`, err)
+          // Keep the default timestamp
         }
       }
     }
@@ -519,6 +575,7 @@ export const getCommitmentEventHistory = async (
     return events
   } catch (error) {
     console.error("Error fetching commitment event history:", error)
-    throw error
+    // Return empty array instead of throwing
+    return []
   }
 }

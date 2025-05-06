@@ -1,3 +1,4 @@
+// Modified useWallet.tsx hook to prevent event filter errors
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -30,7 +31,7 @@ declare global {
   }
 }
 
-const POLKADOT_CHAIN_ID = "0x162" // 354 in decimal
+const POLKADOT_CHAIN_ID = "0x190f1b45" // 354 in decimal
 
 const useWallet = (): UseWalletReturnType => {
   const [account, setAccount] = useState<string | null>(null)
@@ -38,17 +39,22 @@ const useWallet = (): UseWalletReturnType => {
   const [signer, setSigner] = useState<JsonRpcSigner | null>(null)
   const [chainId, setChainId] = useState<number | null>(null)
   const [isCorrectNetwork, setIsCorrectNetwork] = useState<boolean>(false)
-  const [loading, setLoading] = useState<boolean>(true)
+  const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [balance, setBalance] = useState<string | null>(null)
+  const [mounted, setMounted] = useState<boolean>(false)
+  const [balanceUpdateRequested, setBalanceUpdateRequested] = useState<boolean>(false)
 
   // Check if MetaMask is installed
   const checkIfWalletIsInstalled = useCallback((): boolean => {
-    return typeof window !== "undefined" && Boolean(window.ethereum)
+    if (typeof window === "undefined") return false
+    return Boolean(window.ethereum)
   }, [])
 
   // Initialize wallet connection
   const initializeWallet = useCallback(async (): Promise<void> => {
+    if (typeof window === "undefined") return
+
     try {
       if (!checkIfWalletIsInstalled() || !window.ethereum) {
         throw new Error("MetaMask is not installed")
@@ -58,26 +64,63 @@ const useWallet = (): UseWalletReturnType => {
 
       // Request account access
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
+      if (!accounts || accounts.length === 0) {
+        throw new Error("No accounts found")
+      }
+      
       const account = accounts[0]
 
-      // Initialize provider and signer
+      // Initialize provider 
       const provider = new BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-      const network = await provider.getNetwork()
+      
+      // Get network with error handling
+      let network;
+      try {
+        network = await provider.getNetwork()
+      } catch (err) {
+        console.error("Network detection error:", err)
+        // Continue with a default network state
+        network = { chainId: BigInt(0), name: "unknown" }
+      }
 
       // Check if on correct network
       const networkChainId = network.chainId
       const isCorrect = networkChainId === BigInt(354) || "0x" + networkChainId.toString(16) === POLKADOT_CHAIN_ID
 
-      // Get account balance
-      const balance = await provider.getBalance(account)
+      // Get signer after network check
+      let currentSigner = null;
+      try {
+        currentSigner = await provider.getSigner()
+      } catch (err) {
+        console.error("Failed to get signer:", err)
+        // Continue without signer
+      }
+
+      // Get account balance with error handling
+      let balanceValue = "0";
+      try {
+        // Simple direct RPC call instead of using provider.getBalance
+        const balanceHex = await window.ethereum.request({
+          method: "eth_getBalance",
+          params: [account, "latest"]
+        });
+        
+        // Convert hex to decimal and then to ETH units
+        if (balanceHex && typeof balanceHex === 'string') {
+          const balanceWei = BigInt(balanceHex);
+          balanceValue = formatEther(balanceWei);
+        }
+      } catch (err) {
+        console.error("Error fetching balance:", err)
+        // Use default balance
+      }
 
       setAccount(account)
       setProvider(provider)
-      setSigner(signer)
+      setSigner(currentSigner)
       setChainId(Number(networkChainId))
       setIsCorrectNetwork(isCorrect)
-      setBalance(formatEther(balance))
+      setBalance(balanceValue)
       setError(null)
     } catch (error: any) {
       console.error("Failed to initialize wallet", error)
@@ -94,12 +137,19 @@ const useWallet = (): UseWalletReturnType => {
 
   // Disconnect wallet
   const disconnectWallet = useCallback((): void => {
+    if (typeof window === "undefined") return
+    
     setAccount(null)
+    setProvider(null)
     setSigner(null)
     setChainId(null)
     setIsCorrectNetwork(false)
     setBalance(null)
-    localStorage.removeItem("walletConnected")
+    
+    // Only try to access localStorage on client
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("walletConnected")
+    }
   }, [])
 
   // Handle account change
@@ -111,105 +161,126 @@ const useWallet = (): UseWalletReturnType => {
       } else {
         const newAccount = accounts[0]
         setAccount(newAccount)
-
-        if (provider && newAccount) {
-          // Update balance for new account
-          try {
-            const balance = await provider.getBalance(newAccount)
-            setBalance(formatEther(balance))
-          } catch (error) {
-            console.error("Error fetching balance:", error)
-          }
-        }
+        setBalanceUpdateRequested(true)
       }
     },
-    [disconnectWallet, provider],
+    [disconnectWallet]
   )
 
   // Handle chain change
   const handleChainChanged = useCallback(
     async (newChainId: string): Promise<void> => {
-      setChainId(Number.parseInt(newChainId, 16))
+      try {
+        setChainId(Number.parseInt(newChainId, 16))
 
-      // Check if on correct network
-      const isCorrect = Number.parseInt(newChainId, 16) === 354 || newChainId === POLKADOT_CHAIN_ID
-      setIsCorrectNetwork(isCorrect)
+        // Check if on correct network
+        const isCorrect = Number.parseInt(newChainId, 16) === 354 || newChainId === POLKADOT_CHAIN_ID
+        setIsCorrectNetwork(isCorrect)
 
-      // Re-initialize everything with the new chain
-      if (window.ethereum && account) {
-        const provider = new BrowserProvider(window.ethereum)
-        const signer = await provider.getSigner()
-
-        setProvider(provider)
-        setSigner(signer)
-
-        try {
-          const balance = await provider.getBalance(account)
-          setBalance(formatEther(balance))
-        } catch (error) {
-          console.error("Error fetching balance:", error)
+        // Re-initialize provider and signer
+        if (typeof window !== "undefined" && window.ethereum && account) {
+          try {
+            const provider = new BrowserProvider(window.ethereum)
+            setProvider(provider)
+            
+            try {
+              const signer = await provider.getSigner()
+              setSigner(signer)
+            } catch (err) {
+              console.error("Error getting signer after chain change:", err)
+              setSigner(null)
+            }
+            
+            // Request a balance update
+            setBalanceUpdateRequested(true)
+          } catch (err) {
+            console.error("Error setting up provider after chain change:", err)
+          }
         }
+      } catch (err) {
+        console.error("Error handling chain change:", err)
       }
     },
-    [account],
+    [account]
   )
 
-  // Update balance
+  // Update balance - safer implementation that doesn't use eth_newFilter
   const updateBalance = useCallback(async (): Promise<void> => {
-    if (provider && account) {
-      try {
-        const balance = await provider.getBalance(account)
-        setBalance(formatEther(balance))
-      } catch (error) {
-        console.error("Error updating balance:", error)
+    if (!account || typeof window === "undefined" || !window.ethereum) return
+
+    try {
+      // Use direct RPC call instead of provider.getBalance to avoid filter issues
+      const balanceHex = await window.ethereum.request({
+        method: "eth_getBalance",
+        params: [account, "latest"]
+      });
+      
+      // Convert hex to decimal and then to ETH units
+      if (balanceHex && typeof balanceHex === 'string') {
+        const balanceWei = BigInt(balanceHex);
+        setBalance(formatEther(balanceWei));
       }
+      
+      // Reset the update request flag
+      setBalanceUpdateRequested(false)
+    } catch (error) {
+      console.error("Error updating balance:", error)
+      // Don't update the state in case of error to avoid UI disruption
     }
-  }, [provider, account])
+  }, [account])
 
   // Setup event listeners
   useEffect(() => {
-    if (checkIfWalletIsInstalled() && window.ethereum) {
-      // Check if we should initialize wallet automatically
-      if (localStorage.getItem("walletConnected") === "true") {
-        initializeWallet()
+    setMounted(true)
+    
+    const cleanup = () => {
+      if (typeof window !== "undefined" && window.ethereum) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
+        window.ethereum.removeListener("chainChanged", handleChainChanged)
+      }
+    }
+    
+    if (typeof window !== "undefined") {
+      if (checkIfWalletIsInstalled() && window.ethereum) {
+        // Check if we should initialize wallet automatically
+        if (localStorage.getItem("walletConnected") === "true") {
+          initializeWallet().catch(err => {
+            console.error("Auto-connect error:", err)
+            localStorage.removeItem("walletConnected")
+          })
+        } else {
+          setLoading(false)
+        }
+
+        // Setup event listeners
+        window.ethereum.on("accountsChanged", handleAccountsChanged)
+        window.ethereum.on("chainChanged", handleChainChanged)
+
+        return cleanup
       } else {
         setLoading(false)
       }
-
-      // Setup event listeners
-      window.ethereum.on("accountsChanged", handleAccountsChanged)
-      window.ethereum.on("chainChanged", handleChainChanged)
-
-      // Cleanup
-      return () => {
-        if (window.ethereum) {
-          window.ethereum.removeListener("accountsChanged", handleAccountsChanged)
-          window.ethereum.removeListener("chainChanged", handleChainChanged)
-        }
-      }
-    } else {
-      setLoading(false)
-      setError("MetaMask is not installed")
     }
+    
+    return cleanup
   }, [checkIfWalletIsInstalled, handleAccountsChanged, handleChainChanged, initializeWallet])
 
-  // Periodically update balance
+  // Handle balance updates when requested
   useEffect(() => {
-    if (account && provider) {
-      const interval = setInterval(updateBalance, 30000) // Update every 30 seconds
-
-      // Initial update
-      updateBalance()
-
-      return () => clearInterval(interval)
+    if (mounted && balanceUpdateRequested) {
+      updateBalance().catch(err => {
+        console.error("Balance update error:", err)
+      })
     }
-  }, [account, provider, updateBalance])
+  }, [mounted, balanceUpdateRequested, updateBalance])
 
   // Connect wallet function
   const connectWallet = async (): Promise<void> => {
     try {
       await initializeWallet()
-      localStorage.setItem("walletConnected", "true")
+      if (typeof window !== "undefined") {
+        localStorage.setItem("walletConnected", "true")
+      }
     } catch (error: any) {
       console.error("Error connecting wallet:", error)
       setError(error.message || "Failed to connect wallet")
@@ -218,7 +289,8 @@ const useWallet = (): UseWalletReturnType => {
 
   // Switch to Polkadot network
   const switchToPolkadotNetwork = async (): Promise<void> => {
-    if (!window.ethereum) throw new Error("No crypto wallet found")
+    if (typeof window === "undefined" || !window.ethereum) 
+      throw new Error("No crypto wallet found")
 
     try {
       // Try to switch to Polkadot Asset Hub
@@ -239,21 +311,22 @@ const useWallet = (): UseWalletReturnType => {
   // Add Polkadot network to MetaMask
   const addPolkadotNetwork = async (): Promise<void> => {
     try {
-      if (!window.ethereum) throw new Error("No crypto wallet found")
+      if (typeof window === "undefined" || !window.ethereum) 
+        throw new Error("No crypto wallet found")
 
       await window.ethereum.request({
         method: "wallet_addEthereumChain",
         params: [
           {
             chainId: POLKADOT_CHAIN_ID,
-            chainName: "Polkadot Asset Hub",
+            chainName: "Westend Asset Hub",
             nativeCurrency: {
-              name: "DOT",
-              symbol: "DOT",
-              decimals: 18,
+             name: "WND",
+             symbol: "WND",
+             decimals: 18,
             },
-            rpcUrls: ["https://polkadot-asset-hub-rpc.polkadot.io"],
-            blockExplorerUrls: ["https://assethub.polkadot.subscan.io/"],
+            rpcUrls: ["https://westend-asset-hub-eth-rpc.polkadot.io"],
+            blockExplorerUrls: ["https://blockscout-asset-hub.parity-chains-swc.parity.io"],
           },
         ],
       })
@@ -276,8 +349,9 @@ const useWallet = (): UseWalletReturnType => {
     disconnectWallet,
     switchToPolkadotNetwork,
     updateBalance,
-    isWalletInstalled: checkIfWalletIsInstalled(),
+    isWalletInstalled: mounted ? checkIfWalletIsInstalled() : false,
   }
 }
 
 export default useWallet
+

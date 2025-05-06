@@ -1,3 +1,4 @@
+// Fix for Header.tsx
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
@@ -20,9 +21,12 @@ const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState<boolean>(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState<boolean>(false)
+  // Add a mounted state to prevent hydration mismatch
+  const [mounted, setMounted] = useState<boolean>(false)
 
   // Handle scroll effect
   useEffect(() => {
+    setMounted(true)
     const handleScroll = () => {
       if (window.scrollY > 10) {
         setScrolled(true)
@@ -35,12 +39,44 @@ const Header: React.FC = () => {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
+  // Only render the full component after mounting on client
+  if (!mounted) {
+    return (
+      <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-transparent">
+        <div className="container-custom">
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                >
+                  <path d="M18 6 7 17l-5-5" />
+                  <path d="m22 10-7.5 7.5L13 16" />
+                </svg>
+              </div>
+              <span className="text-xl font-bold">ChainCommit</span>
+            </div>
+            <div>{/* Placeholder for buttons */}</div>
+          </div>
+        </div>
+      </header>
+    )
+  }
+
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled ? "bg-white/95 backdrop-blur-sm shadow-sm" : "bg-transparent"
       }`}
     >
+      {/* Rest of your component remains the same */}
       <div className="container-custom">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
@@ -187,3 +223,7 @@ const Header: React.FC = () => {
 }
 
 export default Header
+
+
+
+
