@@ -1,33 +1,45 @@
 "use client"
 
 import type React from "react"
-import { useState, type FormEvent, type ChangeEvent } from "react"
+import { useState, useEffect, type FormEvent, type ChangeEvent } from "react"
 import useWallet from "../../lib/hooks/useWallet"
 import { createCommitment } from "../../lib/contract"
 import type { CommitmentCreatedResult } from "../../lib/contract/types"
-import { AlertTriangle, Loader2 } from "lucide-react"
+import { AlertTriangle, Loader2, Info } from "lucide-react"
 
 interface CommitmentFormProps {
-  onSuccess: (result: CommitmentCreatedResult) => void
+  onSuccess: (result: CommitmentCreatedResult) => void;
+  templateType?: string | null;
 }
 
 interface FormData {
-  name: string
-  description: string
-  totalMembers: number
-  stakeAmount: number
-  durationInDays: number
+  name: string;
+  description: string;
+  totalMembers: number;
+  stakeAmount: number;
+  durationInDays: number;
 }
 
 interface ValidationErrors {
-  name?: string
-  description?: string
-  totalMembers?: string
-  stakeAmount?: string
-  durationInDays?: string
+  name?: string;
+  description?: string;
+  totalMembers?: string;
+  stakeAmount?: string;
+  durationInDays?: string;
 }
 
-const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
+interface TemplateData {
+  [key: string]: {
+    name: string;
+    description: string;
+    totalMembers: number;
+    stakeAmount: number;
+    durationInDays: number;
+    info?: string;
+  }
+}
+
+const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess, templateType }) => {
   const { signer, account, isCorrectNetwork, switchToPolkadotNetwork } = useWallet()
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,8 +51,57 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
     durationInDays: 30,
   })
 
+  // Template definitions
+  const templates: TemplateData = {
+    freelance: {
+      name: "Freelance Work Agreement",
+      description: "Contract between client and freelancer with milestone-based payments. Payment will be released only when client approves the work.",
+      totalMembers: 2,
+      stakeAmount: 1.5,
+      durationInDays: 30,
+      info: "This template is designed for client-freelancer relationships with built-in escrow protection."
+    },
+    partnership: {
+      name: "Business Partnership Agreement",
+      description: "Joint venture agreement with profit sharing and mutual obligations between business partners.",
+      totalMembers: 2,
+      stakeAmount: 5.0,
+      durationInDays: 90,
+      info: "Ideal for formalizing business partnerships with clear terms and accountability."
+    },
+    supply: {
+      name: "Supply Chain Contract",
+      description: "Multi-party agreement for supply chain management with delivery milestones and quality verification.",
+      totalMembers: 3,
+      stakeAmount: 2.5,
+      durationInDays: 60,
+      info: "Designed for coordinating suppliers, manufacturers, and distributors with incentivized on-time delivery."
+    },
+    "cross-chain": {
+      name: "Cross-Chain Collaboration Agreement",
+      description: "Agreement leveraging Polkadot's cross-chain capabilities for multi-asset staking and interoperability.",
+      totalMembers: 2,
+      stakeAmount: 3.0,
+      durationInDays: 45,
+      info: "Utilizes Polkadot's XCM protocol to enable agreements using tokens from multiple parachains."
+    }
+  }
+
   // Form validation
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
+
+  // Load template data
+  useEffect(() => {
+    if (templateType && templates[templateType]) {
+      setFormData({
+        name: templates[templateType].name,
+        description: templates[templateType].description,
+        totalMembers: templates[templateType].totalMembers,
+        stakeAmount: templates[templateType].stakeAmount,
+        durationInDays: templates[templateType].durationInDays,
+      })
+    }
+  }, [templateType])
 
   // Handle input change
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -133,8 +194,8 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
         onSuccess(result)
       }
     } catch (err: any) {
-      console.error("Error creating commitment:", err)
-      setError(err.message || "Failed to create commitment")
+      console.error("Error creating contract:", err)
+      setError(err.message || "Failed to create contract")
     } finally {
       setLoading(false)
     }
@@ -142,7 +203,17 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
 
   return (
     <div className="card">
-      <h2 className="heading-3 mb-6">Create a New Commitment</h2>
+      <h2 className="heading-3 mb-6">Contract Details</h2>
+
+      {templateType && templates[templateType]?.info && (
+        <div className="mb-6 rounded-lg bg-primary/10 p-4 flex items-start gap-3">
+          <Info className="h-5 w-5 text-primary mt-0.5" />
+          <div>
+            <p className="font-medium text-primary mb-1">Template Information</p>
+            <p className="text-sm">{templates[templateType].info}</p>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded-lg bg-destructive/10 p-4 text-destructive">
@@ -163,14 +234,14 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
           <label htmlFor="name" className="text-sm font-medium">
-            Commitment Name <span className="text-destructive">*</span>
+            Contract Name <span className="text-destructive">*</span>
           </label>
           <input
             type="text"
             id="name"
             value={formData.name}
             onChange={handleChange}
-            placeholder="Enter commitment name"
+            placeholder="Enter contract name"
             required
             className={`input-primary ${validationErrors.name ? "border-destructive" : ""}`}
           />
@@ -185,7 +256,7 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
             id="description"
             value={formData.description}
             onChange={handleChange}
-            placeholder="Enter commitment description"
+            placeholder="Enter contract description"
             required
             rows={3}
             className={`input-primary min-h-[100px] resize-y ${validationErrors.description ? "border-destructive" : ""}`}
@@ -196,7 +267,7 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div className="space-y-2">
             <label htmlFor="totalMembers" className="text-sm font-medium">
-              Total Members <span className="text-destructive">*</span>
+              Total Participants <span className="text-destructive">*</span>
             </label>
             <input
               type="number"
@@ -261,7 +332,7 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
               Creating...
             </span>
           ) : (
-            "Create Commitment"
+            "Create Contract"
           )}
         </button>
       </form>
@@ -270,3 +341,11 @@ const CommitmentForm: React.FC<CommitmentFormProps> = ({ onSuccess }) => {
 }
 
 export default CommitmentForm
+
+
+
+
+
+
+
+

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import useWallet from "../../lib/hooks/useWallet"
 import CommitmentForm from "../../components/commitments/CommitmentForm"
 import type { CommitmentCreatedResult } from "../../lib/contract/types"
@@ -9,10 +9,20 @@ import { ArrowLeft, CheckCircle2, Copy, ArrowRight, Wallet, Plus } from "lucide-
 
 export default function CreatePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { account, connectWallet } = useWallet()
   const [successModal, setSuccessModal] = useState<boolean>(false)
   const [createdCommitment, setCreatedCommitment] = useState<CommitmentCreatedResult | null>(null)
   const [copySuccess, setCopySuccess] = useState<boolean>(false)
+  const [templateType, setTemplateType] = useState<string | null>(null)
+
+  // Check for template parameter
+  useEffect(() => {
+    const template = searchParams.get('template')
+    if (template) {
+      setTemplateType(template)
+    }
+  }, [searchParams])
 
   // Handle successful commitment creation
   const handleSuccess = (result: CommitmentCreatedResult) => {
@@ -41,14 +51,14 @@ export default function CreatePage() {
     return (
       <div className="container-custom pt-32 pb-16">
         <div className="mx-auto max-w-md">
-          <h1 className="heading-2 mb-6 text-center">Create a New Commitment</h1>
+          <h1 className="heading-2 mb-6 text-center">Create a New Contract</h1>
 
           <div className="card text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary mx-auto mb-4">
               <Wallet className="h-8 w-8 text-primary" />
             </div>
             <h3 className="heading-3 mb-4">Connect Your Wallet</h3>
-            <p className="text-muted-foreground mb-6">You need to connect your wallet to create a new commitment.</p>
+            <p className="text-muted-foreground mb-6">You need to connect your wallet to create a new contract.</p>
             <button onClick={connectWallet} className="btn-primary">
               Connect Wallet
             </button>
@@ -65,10 +75,15 @@ export default function CreatePage() {
           <button onClick={() => router.push("/dashboard")} className="mr-4 text-muted-foreground hover:text-primary">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="heading-2">Create a New Commitment</h1>
+          <h1 className="heading-2">
+            {templateType ? `Create ${formatTemplateName(templateType)} Contract` : "Create a New Contract"}
+          </h1>
         </div>
 
-        <CommitmentForm onSuccess={handleSuccess} />
+        <CommitmentForm 
+          onSuccess={handleSuccess} 
+          templateType={templateType}
+        />
       </div>
 
       {/* Success Modal */}
@@ -76,7 +91,7 @@ export default function CreatePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-lg border bg-card shadow-lg">
             <div className="flex items-center justify-between border-b p-4">
-              <h3 className="heading-4">Commitment Created Successfully!</h3>
+              <h3 className="heading-4">Contract Created Successfully!</h3>
               <button
                 onClick={() => setSuccessModal(false)}
                 className="rounded-full p-1 text-muted-foreground hover:bg-secondary"
@@ -94,7 +109,7 @@ export default function CreatePage() {
                 <h3 className="heading-4 mb-2">{createdCommitment?.name}</h3>
 
                 <p className="text-muted-foreground mb-6">
-                  Your commitment has been created successfully. Share the join code with others to invite them to join.
+                  Your contract has been created successfully. Share the join code with others to invite them to participate.
                 </p>
 
                 <div className="mb-6">
@@ -120,7 +135,7 @@ export default function CreatePage() {
                   </button>
                   <button onClick={handleViewCommitment} className="btn-primary flex items-center justify-center gap-2">
                     <ArrowRight className="h-4 w-4" />
-                    <span>View Commitment</span>
+                    <span>View Contract</span>
                   </button>
                 </div>
               </div>
@@ -131,3 +146,24 @@ export default function CreatePage() {
     </div>
   )
 }
+
+// Helper function to format template names for display
+function formatTemplateName(templateType: string): string {
+  switch (templateType) {
+    case 'freelance':
+      return 'Freelance Agreement';
+    case 'partnership':
+      return 'Partnership';
+    case 'supply':
+      return 'Supply Chain';
+    case 'cross-chain':
+      return 'Cross-Chain';
+    default:
+      return templateType.charAt(0).toUpperCase() + templateType.slice(1);
+  }
+}
+
+
+
+
+

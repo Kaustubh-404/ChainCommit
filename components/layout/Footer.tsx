@@ -24,7 +24,7 @@ const Footer: React.FC = () => {
                   <path d="m22 10-7.5 7.5L13 16" />
                 </svg>
               </div>
-              <span className="text-xl font-bold">ChainCommit</span>
+              <span className="text-xl font-bold">SafeStakes</span>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
               A decentralized accountability platform built on Polkadot that empowers individuals and organizations to
@@ -56,6 +56,16 @@ const Footer: React.FC = () => {
                   className="text-sm text-muted-foreground hover:text-primary transition-colors"
                 >
                   Join Commitment
+                </Link>
+              </li>
+              <li>
+                <Link href="/solutions" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Solutions
+                </Link>
+              </li>
+              <li>
+                <Link href="/enterprise" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Enterprise
                 </Link>
               </li>
             </ul>
@@ -98,7 +108,7 @@ const Footer: React.FC = () => {
 
         <div className="mt-8 border-t border-border pt-6 text-center">
           <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} ChainCommit. All rights reserved.
+            &copy; {new Date().getFullYear()} SafeStakes. All rights reserved.
           </p>
         </div>
       </div>

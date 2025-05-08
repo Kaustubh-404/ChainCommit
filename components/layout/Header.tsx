@@ -61,7 +61,7 @@ const Header: React.FC = () => {
                   <path d="m22 10-7.5 7.5L13 16" />
                 </svg>
               </div>
-              <span className="text-xl font-bold">ChainCommit</span>
+              <span className="text-xl font-bold">SafeStakes</span>
             </div>
             <div>{/* Placeholder for buttons */}</div>
           </div>
@@ -95,7 +95,7 @@ const Header: React.FC = () => {
                 <path d="m22 10-7.5 7.5L13 16" />
               </svg>
             </div>
-            <span className="text-xl font-bold">ChainCommit</span>
+            <span className="text-xl font-bold">SafeStakes</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -117,6 +117,18 @@ const Header: React.FC = () => {
               className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
             >
               Join Commitment
+            </Link>
+            <Link
+              href="/solutions"
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+            >
+              Solutions
+            </Link>
+            <Link
+              href="/enterprise"
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+            >
+              Enterprise
             </Link>
           </nav>
 

@@ -8,7 +8,7 @@ import type { Metadata } from "next"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "ChainCommit - Cross-Chain Accountability Platform",
+  title: "SafeStakes - Cross-Chain Accountability Platform",
   description:
     "A decentralized accountability platform built on Polkadot that empowers individuals and organizations to create commitment-driven agreements.",
     generator: 'v0.dev'

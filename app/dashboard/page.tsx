@@ -7,6 +7,7 @@ import useCommitments from "../../lib/hooks/useCommitments"
 import CommitmentCard from "../../components/commitments/CommitmentCard"
 import type { CommitmentDetails } from "../../lib/contract/types"
 import { Plus, ArrowRight, Wallet, Loader2 } from "lucide-react"
+import ContractTemplates from "../../components/dashboard/ContractTemplates"
 
 export default function DashboardPage() {
   const { account, provider, connectWallet } = useWallet()
@@ -105,6 +106,11 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Contract Templates - Add this section */}
+      {account && (
+        <ContractTemplates />
+      )}
 
       {/* Tabs */}
       <div className="border-b mb-8">
