@@ -128,13 +128,6 @@ npm install
 npm run dev
 ```
 
-## Meet The Team
-
-We are a team of blockchain enthusiasts passionate about creating practical applications that solve real-world problems. Our diverse background spans smart contract development, UI/UX design, and behavioral economics.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgements
 
